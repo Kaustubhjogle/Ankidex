@@ -1,5 +1,6 @@
 "use client";
 
+import { User } from "@supabase/supabase-js";
 import { Button } from "@heroui/react";
 import { useEffect, useMemo, useState } from "react";
 import AnkiAddDeckModal from "@/components/AnkiAddDeckModal";
@@ -8,13 +9,38 @@ import AnkiAllFlashcardsModal from "@/components/AnkiAllFlashcardsModal";
 import AnkiHeader from "@/components/AnkiHeader";
 import AnkiReviewPanel from "@/components/AnkiReviewPanel";
 import AnkiSidebar from "@/components/AnkiSidebar";
-import { applyRecall, makeId, resetCardProgress } from "@/components/ankiScheduler";
-import { loadActiveDeckIdFromStorage, loadDecksFromStorage, saveStateToStorage } from "@/components/ankiStorage";
+import AuthPanel from "@/components/AuthPanel";
+import { applyRecall, resetCardProgress } from "@/components/ankiScheduler";
 import { Deck, Flashcard, QualityScore } from "@/components/ankiTypes";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  createCardRecord,
+  createDeckRecord,
+  fetchUserDecks,
+  resetDeckReviews,
+  upsertCardReviewRecord,
+} from "@/lib/supabase/ankiRepository";
 
 export default function Home() {
-  const [decks, setDecks] = useState<Deck[]>(loadDecksFromStorage);
-  const [activeDeckId, setActiveDeckId] = useState<string | null>(loadActiveDeckIdFromStorage);
+  const [supabase] = useState(createSupabaseBrowserClient);
+  const missingSupabaseConfig = !supabase;
+
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(() => missingSupabaseConfig);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authLoadingAction, setAuthLoadingAction] = useState<"signin" | "signup" | null>(null);
+  const [authCooldownUntil, setAuthCooldownUntil] = useState<number>(0);
+  const [authError, setAuthError] = useState<string | null>(() =>
+    missingSupabaseConfig
+      ? "Missing Supabase keys. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local."
+      : null
+  );
+
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [activeDeckId, setActiveDeckId] = useState<string | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const [newDeckName, setNewDeckName] = useState("");
   const [newFront, setNewFront] = useState("");
@@ -32,13 +58,70 @@ export default function Home() {
   const [nowTs, setNowTs] = useState(() => Date.now());
 
   useEffect(() => {
-    saveStateToStorage(decks, activeDeckId);
-  }, [decks, activeDeckId]);
-
-  useEffect(() => {
     const timer = window.setInterval(() => setNowTs(Date.now()), 30000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    let isMounted = true;
+
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (!isMounted) return;
+      if (error && !error.message.toLowerCase().includes("auth session missing")) {
+        setAuthError(error.message);
+      }
+      setAuthUser(data.user ?? null);
+      setAuthReady(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null);
+      if (session?.user) {
+        setAuthError(null);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase || !authUser) return;
+
+    let cancelled = false;
+
+    const load = async () => {
+      setDataLoading(true);
+      setDataError(null);
+      try {
+        const loadedDecks = await fetchUserDecks(supabase, authUser.id);
+        if (cancelled) return;
+
+        setDecks(loadedDecks);
+        setActiveDeckId((prev) => {
+          if (prev && loadedDecks.some((deck) => deck.id === prev)) return prev;
+          return loadedDecks[0]?.id ?? null;
+        });
+      } catch (error) {
+        if (cancelled) return;
+        setDataError(error instanceof Error ? error.message : "Could not load decks.");
+      } finally {
+        if (!cancelled) setDataLoading(false);
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, authUser]);
 
   const activeDeck = useMemo(
     () => decks.find((deck) => deck.id === activeDeckId) ?? null,
@@ -73,101 +156,113 @@ export default function Home() {
     ? "max-h-24 opacity-100 translate-x-0"
     : "max-h-0 opacity-0 -translate-x-1 pointer-events-none";
 
-  function createDeck() {
+  async function createDeck() {
+    if (!supabase || !authUser) return;
+
     const name = newDeckName.trim();
     if (!name) return;
 
-    const deck: Deck = {
-      id: makeId(),
-      name,
-      createdAt: Date.now(),
-      cards: [],
-    };
-
-    setDecks((prev) => [deck, ...prev]);
-    setActiveDeckId(deck.id);
-    setNewDeckName("");
-    setReviewCardId(null);
-    setShowBack(false);
-    setIsDeckModalOpen(false);
+    setDataError(null);
+    try {
+      const deck = await createDeckRecord(supabase, authUser.id, name);
+      setDecks((prev) => [deck, ...prev]);
+      setActiveDeckId(deck.id);
+      setNewDeckName("");
+      setReviewCardId(null);
+      setShowBack(false);
+      setIsDeckModalOpen(false);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Could not create deck.");
+    }
   }
 
-  function addCard() {
-    if (!activeDeckId) return;
+  async function addCard() {
+    if (!supabase || !authUser || !activeDeckId) return;
 
     const front = newFront.trim();
     const back = newBack.trim();
     if (!front || !back) return;
 
-    const card: Flashcard = {
-      id: makeId(),
-      front,
-      back,
-      createdAt: Date.now(),
-      dueAt: Date.now(),
-      intervalDays: 0,
-      easeFactor: 2.2,
-      streak: 0,
-      reviews: 0,
-    };
+    setDataError(null);
+    try {
+      const card = await createCardRecord(supabase, authUser.id, activeDeckId, front, back);
 
-    setDecks((prev) =>
-      prev.map((deck) =>
-        deck.id === activeDeckId
-          ? {
-              ...deck,
-              cards: [card, ...deck.cards],
-            }
-          : deck
-      )
-    );
+      setDecks((prev) =>
+        prev.map((deck) =>
+          deck.id === activeDeckId
+            ? {
+                ...deck,
+                cards: [card, ...deck.cards],
+              }
+            : deck
+        )
+      );
 
-    setNewFront("");
-    setNewBack("");
-    setIsAddModalOpen(false);
-    setReviewCardId(card.id);
-    setShowBack(false);
-    setNowTs(Date.now());
+      setNewFront("");
+      setNewBack("");
+      setIsAddModalOpen(false);
+      setReviewCardId(card.id);
+      setShowBack(false);
+      setNowTs(Date.now());
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Could not add card.");
+    }
   }
 
-  function rateCurrentCard(q: QualityScore) {
-    if (!activeDeckId || !reviewCard) return;
+  async function rateCurrentCard(q: QualityScore) {
+    if (!supabase || !authUser || !activeDeckId || !reviewCard) return;
 
     const now = Date.now();
     const updatedCard = applyRecall(reviewCard, q, now);
 
-    setDecks((prev) =>
-      prev.map((deck) => {
-        if (deck.id !== activeDeckId) return deck;
-        return {
-          ...deck,
-          cards: deck.cards.map((card) => (card.id === reviewCard.id ? updatedCard : card)),
-        };
-      })
-    );
+    setDataError(null);
+    try {
+      await upsertCardReviewRecord(supabase, authUser.id, updatedCard);
 
-    setShowBack(false);
-    setReviewCardId(null);
-    setNowTs(now);
+      setDecks((prev) =>
+        prev.map((deck) => {
+          if (deck.id !== activeDeckId) return deck;
+          return {
+            ...deck,
+            cards: deck.cards.map((card) => (card.id === reviewCard.id ? updatedCard : card)),
+          };
+        })
+      );
+
+      setShowBack(false);
+      setReviewCardId(null);
+      setNowTs(now);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Could not update review.");
+    }
   }
 
-  function resetProgress() {
-    if (!activeDeckId) return;
+  async function resetProgress() {
+    if (!supabase || !authUser || !activeDeckId || !activeDeck) return;
 
     const now = Date.now();
-    setDecks((prev) =>
-      prev.map((deck) => {
-        if (deck.id !== activeDeckId) return deck;
-        return {
-          ...deck,
-          cards: deck.cards.map((card) => resetCardProgress(card, now)),
-        };
-      })
-    );
+    const resetCards = activeDeck.cards.map((card) => resetCardProgress(card, now));
 
-    setReviewCardId(null);
-    setShowBack(false);
-    setNowTs(now);
+    setDataError(null);
+    try {
+      await resetDeckReviews(supabase, authUser.id, activeDeck.cards, now);
+
+      setDecks((prev) =>
+        prev.map((deck) => {
+          if (deck.id !== activeDeckId) return deck;
+          return {
+            ...deck,
+            cards: resetCards,
+          };
+        })
+      );
+
+      setReviewCardId(null);
+      setShowBack(false);
+      setNowTs(now);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Could not reset progress.");
+    }
   }
 
   function switchDeck(deckId: string) {
@@ -185,10 +280,139 @@ export default function Home() {
     setIsAllFlashcardsModalOpen(false);
   }
 
+  function getAuthErrorMessage(error: { message?: string; status?: number } | null | undefined) {
+    if (!error) return "Auth request failed. Please try again.";
+    const message = (error.message ?? "").toLowerCase();
+
+    if (error.status === 429 || message.includes("rate limit")) {
+      setAuthCooldownUntil(Date.now() + 60_000);
+      return "Too many attempts right now. Wait about a minute, then try again.";
+    }
+
+    if (message.includes("failed to fetch")) {
+      return "Could not reach Supabase. Check your internet and Supabase URL/key, then try again.";
+    }
+
+    if (message.includes("invalid login credentials")) {
+      return "Email or password is incorrect.";
+    }
+
+    return error.message ?? "Auth request failed. Please try again.";
+  }
+
+  async function signIn() {
+    if (!supabase) return;
+    if (Date.now() < authCooldownUntil) {
+      const waitSeconds = Math.ceil((authCooldownUntil - Date.now()) / 1000);
+      setAuthError(`Please wait ${waitSeconds}s before trying again.`);
+      return;
+    }
+
+    const normalizedEmail = authEmail.trim().toLowerCase();
+
+    if (!normalizedEmail || !authPassword) {
+      setAuthError("Enter email and password.");
+      return;
+    }
+
+    setAuthLoadingAction("signin");
+    setAuthError(null);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password: authPassword,
+    });
+
+    if (error) setAuthError(getAuthErrorMessage(error));
+    setAuthLoadingAction(null);
+  }
+
+  async function signUp() {
+    if (!supabase) return;
+    if (Date.now() < authCooldownUntil) {
+      const waitSeconds = Math.ceil((authCooldownUntil - Date.now()) / 1000);
+      setAuthError(`Please wait ${waitSeconds}s before trying again.`);
+      return;
+    }
+
+    const normalizedEmail = authEmail.trim().toLowerCase();
+
+    if (!normalizedEmail || !authPassword) {
+      setAuthError("Enter email and password.");
+      return;
+    }
+
+    setAuthLoadingAction("signup");
+    setAuthError(null);
+
+    const { error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password: authPassword,
+    });
+
+    if (error) {
+      setAuthError(getAuthErrorMessage(error));
+    } else {
+      setAuthError("Account created. Check your email to verify, then sign in.");
+    }
+
+    setAuthLoadingAction(null);
+  }
+
+  async function signOut() {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setAuthUser(null);
+    setAuthError(null);
+    setAuthEmail("");
+    setAuthPassword("");
+    setDecks([]);
+    setActiveDeckId(null);
+  }
+
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.25),_transparent_42%),linear-gradient(145deg,#f8fafc_0%,#f8fafc_45%,#fff7ed_100%)] px-4 py-8 sm:px-6">
+        <div className="mx-auto flex min-h-[80vh] max-w-md items-center justify-center">
+          <p className="text-zinc-600">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <AuthPanel
+        email={authEmail}
+        password={authPassword}
+        signInLoading={authLoadingAction === "signin"}
+        signUpLoading={authLoadingAction === "signup"}
+        error={authError}
+        onEmailChange={setAuthEmail}
+        onPasswordChange={setAuthPassword}
+        onSignIn={signIn}
+        onSignUp={signUp}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.25),_transparent_42%),linear-gradient(145deg,#f8fafc_0%,#f8fafc_45%,#fff7ed_100%)] px-3 py-4 sm:px-5 sm:py-6">
       <div className="mx-auto max-w-6xl">
-        <AnkiHeader hasActiveDeck={Boolean(activeDeck)} onAddFlashcard={() => setIsAddModalOpen(true)} />
+        <AnkiHeader
+          hasActiveDeck={Boolean(activeDeck)}
+          userEmail={authUser.email ?? "signed-in user"}
+          onAddFlashcard={() => setIsAddModalOpen(true)}
+          onSignOut={signOut}
+        />
+
+        {dataError ? (
+          <p className="mb-3 rounded-xl border border-danger/30 bg-danger-50 px-3 py-2 text-sm text-danger">
+            {dataError}
+          </p>
+        ) : null}
+
+        {dataLoading ? <p className="mb-3 text-sm text-zinc-600">Syncing your decks...</p> : null}
 
         <div className="grid gap-4 md:grid-cols-[auto_1fr]">
           <AnkiSidebar
