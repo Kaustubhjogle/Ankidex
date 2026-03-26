@@ -36,10 +36,10 @@ export default function AnkiAddFlashcardModal({
       placement="bottom-center"
       scrollBehavior="inside"
       motionProps={{
-        initial: { opacity: 0, y: 16, scale: 0.98 },
+        initial: { opacity: 0, y: 18, scale: 0.98 },
         animate: { opacity: 1, y: 0, scale: 1 },
-        exit: { opacity: 0, y: 20, scale: 0.96 },
-        transition: { duration: 0.22, ease: "easeOut" },
+        exit: { opacity: 0, y: 20, scale: 0.97 },
+        transition: { duration: 0.24, ease: "easeOut" },
       }}
     >
       <ModalContent>

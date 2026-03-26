@@ -24,6 +24,7 @@ import {
 export default function Home() {
   const [supabase] = useState(createSupabaseBrowserClient);
   const missingSupabaseConfig = !supabase;
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(() => missingSupabaseConfig);
@@ -50,6 +51,7 @@ export default function Home() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSavingCard, setIsSavingCard] = useState(false);
+  const [isCreatingDeck, setIsCreatingDeck] = useState(false);
   const [isDeckModalOpen, setIsDeckModalOpen] = useState(false);
   const [isAllFlashcardsModalOpen, setIsAllFlashcardsModalOpen] = useState(false);
 
@@ -59,6 +61,25 @@ export default function Home() {
   const [reviewCardId, setReviewCardId] = useState<string | null>(null);
   const [showBack, setShowBack] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("ankidex-theme");
+    if (savedTheme === "light" || savedTheme === "dark") {
+      setTheme(savedTheme);
+      return;
+    }
+
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setTheme(prefersDark ? "dark" : "light");
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove("light", "dark");
+    root.classList.add(theme);
+    root.style.colorScheme = theme;
+    window.localStorage.setItem("ankidex-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowTs(Date.now()), 30000);
@@ -163,13 +184,37 @@ export default function Home() {
     ? "max-h-24 opacity-100 translate-x-0"
     : "max-h-0 opacity-0 -translate-x-1 pointer-events-none";
 
-  async function createDeck() {
-    if (!supabase || !authUser) return;
+  const appThemeToggle = (
+    <div className="fixed bottom-3 right-3 z-50 sm:bottom-5 sm:right-5">
+      <Button
+        isIconOnly
+        size="sm"
+        variant="flat"
+        aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        className="h-9 w-9 min-w-0 rounded-full border border-zinc-200/80 bg-white/70 text-zinc-700 shadow-sm backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/65 dark:text-zinc-200"
+        onPress={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
+      >
+        {theme === "dark" ? (
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+            <path d="M12 4.5a1 1 0 0 1 1 1V7a1 1 0 1 1-2 0V5.5a1 1 0 0 1 1-1Zm0 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm7.5-3.5h-1.5a1 1 0 1 1 0-2h1.5a1 1 0 1 1 0 2Zm-13.5 0H4.5a1 1 0 1 1 0-2H6a1 1 0 1 1 0 2Zm9.19 4.19a1 1 0 0 1 1.41 0l1.06 1.06a1 1 0 1 1-1.41 1.41l-1.06-1.06a1 1 0 0 1 0-1.41Zm-8.38 0a1 1 0 0 1 0 1.41L5.75 19.66a1 1 0 0 1-1.41-1.41l1.06-1.06a1 1 0 0 1 1.41 0Zm8.38-10.38a1 1 0 0 1 0-1.41l1.06-1.06a1 1 0 1 1 1.41 1.41L16.6 6.81a1 1 0 0 1-1.41 0Zm-8.38 0a1 1 0 0 1-1.41 0L4.34 5.75A1 1 0 1 1 5.75 4.34l1.06 1.06a1 1 0 0 1 0 1.41Z" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+            <path d="M19.2 15.5A7.5 7.5 0 0 1 8.5 4.8a.75.75 0 0 0-.95-.95A9 9 0 1 0 20.15 16.45a.75.75 0 0 0-.95-.95Z" />
+          </svg>
+        )}
+      </Button>
+    </div>
+  );
+
+  async function createDeck(): Promise<boolean> {
+    if (!supabase || !authUser || isCreatingDeck) return false;
 
     const name = newDeckName.trim();
-    if (!name) return;
+    if (!name) return false;
 
     setDataError(null);
+    setIsCreatingDeck(true);
     try {
       const deck = await createDeckRecord(supabase, authUser.id, name);
       setDecks((prev) => [deck, ...prev]);
@@ -177,9 +222,12 @@ export default function Home() {
       setNewDeckName("");
       setReviewCardId(null);
       setShowBack(false);
-      setIsDeckModalOpen(false);
+      return true;
     } catch (error) {
       setDataError(error instanceof Error ? error.message : "Could not create deck.");
+      return false;
+    } finally {
+      setIsCreatingDeck(false);
     }
   }
 
@@ -402,9 +450,10 @@ export default function Home() {
 
   if (!authReady) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.25),_transparent_42%),linear-gradient(145deg,#f8fafc_0%,#f8fafc_45%,#fff7ed_100%)] px-4 py-8 sm:px-6">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.25),_transparent_42%),linear-gradient(145deg,#f8fafc_0%,#f8fafc_45%,#fff7ed_100%)] px-4 py-8 dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.15),_transparent_38%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.14),_transparent_42%),linear-gradient(145deg,#020617_0%,#0f172a_55%,#111827_100%)] sm:px-6">
+        {appThemeToggle}
         <div className="mx-auto flex min-h-[80vh] max-w-md items-center justify-center">
-          <p className="text-zinc-600">Loading session...</p>
+          <p className="text-zinc-600 dark:text-zinc-300">Loading session...</p>
         </div>
       </div>
     );
@@ -412,27 +461,31 @@ export default function Home() {
 
   if (!authUser) {
     return (
-      <AuthPanel
-        username={authUsername}
-        email={authEmail}
-        password={authPassword}
-        mode={authMode}
-        loading={authLoadingAction === authMode}
-        error={authError}
-        onUsernameChange={setAuthUsername}
-        onEmailChange={setAuthEmail}
-        onPasswordChange={setAuthPassword}
-        onSubmit={authMode === "signup" ? signUp : signIn}
-        onToggleMode={() => {
-          setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
-          setAuthError(null);
-        }}
-      />
+      <>
+        {appThemeToggle}
+        <AuthPanel
+          username={authUsername}
+          email={authEmail}
+          password={authPassword}
+          mode={authMode}
+          loading={authLoadingAction === authMode}
+          error={authError}
+          onUsernameChange={setAuthUsername}
+          onEmailChange={setAuthEmail}
+          onPasswordChange={setAuthPassword}
+          onSubmit={authMode === "signup" ? signUp : signIn}
+          onToggleMode={() => {
+            setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
+            setAuthError(null);
+          }}
+        />
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.25),_transparent_42%),linear-gradient(145deg,#f8fafc_0%,#f8fafc_45%,#fff7ed_100%)] px-3 py-4 sm:px-5 sm:py-6">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.25),_transparent_42%),linear-gradient(145deg,#f8fafc_0%,#f8fafc_45%,#fff7ed_100%)] px-3 py-4 dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.15),_transparent_38%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.14),_transparent_42%),linear-gradient(145deg,#020617_0%,#0f172a_55%,#111827_100%)] sm:px-5 sm:py-6">
+      {appThemeToggle}
       <div className="mx-auto max-w-6xl">
         <AnkiHeader
           username={displayUsername}
@@ -440,14 +493,14 @@ export default function Home() {
         />
 
         {dataError ? (
-          <p className="mb-3 rounded-xl border border-danger/30 bg-danger-50 px-3 py-2 text-sm text-danger">
+          <p className="mb-3 rounded-xl border border-danger/30 bg-danger-50 px-3 py-2 text-sm text-danger dark:bg-danger-500/10 dark:text-danger-300">
             {dataError}
           </p>
         ) : null}
 
-        {dataLoading ? <p className="mb-3 text-sm text-zinc-600">Syncing your decks...</p> : null}
+        {dataLoading ? <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-300">Syncing your decks...</p> : null}
 
-        <div className="grid gap-4 md:grid-cols-[auto_1fr]">
+        <div className="grid gap-4 md:items-start md:grid-cols-[auto_1fr]">
           <AnkiSidebar
             decks={decks}
             activeDeckId={activeDeckId}
@@ -487,7 +540,7 @@ export default function Home() {
                 color="primary"
                 variant="flat"
                 size="sm"
-                className="font-semibold px-4"
+                className="px-4 font-semibold dark:bg-cyan-500/15 dark:text-cyan-200"
                 onPress={() => setIsAddModalOpen(true)}
                 isDisabled={!activeDeck}
               >
@@ -497,7 +550,7 @@ export default function Home() {
                 color="secondary"
                 variant="flat"
                 size="sm"
-                className="font-semibold px-4"
+                className="px-4 font-semibold dark:bg-violet-500/15 dark:text-violet-200"
                 onPress={() => setIsAllFlashcardsModalOpen(true)}
                 isDisabled={!activeDeck || sortedCards.length === 0}
               >
@@ -521,6 +574,7 @@ export default function Home() {
 
       <AnkiAddDeckModal
         isOpen={isDeckModalOpen}
+        isCreating={isCreatingDeck}
         name={newDeckName}
         onOpenChange={setIsDeckModalOpen}
         onNameChange={setNewDeckName}

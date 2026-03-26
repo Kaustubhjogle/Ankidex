@@ -10,21 +10,33 @@ import {
 
 type AnkiAddDeckModalProps = {
   isOpen: boolean;
+  isCreating: boolean;
   name: string;
   onOpenChange: (isOpen: boolean) => void;
   onNameChange: (value: string) => void;
-  onCreate: () => void;
+  onCreate: () => Promise<boolean> | boolean;
 };
 
 export default function AnkiAddDeckModal({
   isOpen,
+  isCreating,
   name,
   onOpenChange,
   onNameChange,
   onCreate,
 }: AnkiAddDeckModalProps) {
   return (
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange} placement="bottom-center">
+    <Modal
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      placement="bottom-center"
+      motionProps={{
+        initial: { opacity: 0, y: 18, scale: 0.98 },
+        animate: { opacity: 1, y: 0, scale: 1 },
+        exit: { opacity: 0, y: 20, scale: 0.97 },
+        transition: { duration: 0.24, ease: "easeOut" },
+      }}
+    >
       <ModalContent>
         {(onClose) => (
           <>
@@ -39,10 +51,18 @@ export default function AnkiAddDeckModal({
               />
             </ModalBody>
             <ModalFooter>
-              <Button variant="light" onPress={onClose}>
+              <Button variant="light" onPress={onClose} isDisabled={isCreating}>
                 Cancel
               </Button>
-              <Button color="primary" onPress={onCreate}>
+              <Button
+                color="primary"
+                isLoading={isCreating}
+                isDisabled={isCreating}
+                onPress={async () => {
+                  const created = await onCreate();
+                  if (created) onClose();
+                }}
+              >
                 Create Deck
               </Button>
             </ModalFooter>

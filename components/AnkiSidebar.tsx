@@ -35,11 +35,11 @@ export default function AnkiSidebar({
   return (
     <>
       <div className="md:hidden">
-        <div className="rounded-2xl border border-white/70 bg-white/85 p-3 shadow-lg shadow-sky-100/60 backdrop-blur">
+        <div className="rounded-2xl border border-white/70 bg-white/85 p-3 shadow-lg shadow-sky-100/60 backdrop-blur dark:border-zinc-700/80 dark:bg-zinc-900/70 dark:shadow-none">
           <div className="flex items-center gap-2">
             <button
               onClick={onOpenAddDeck}
-              className="shrink-0 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700"
+              className="shrink-0 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
             >
               + Add Deck
             </button>
@@ -57,8 +57,8 @@ export default function AnkiSidebar({
                     onClick={() => onSwitchDeck(deck.id)}
                     className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium ${
                       selected
-                        ? "border-blue-300 bg-blue-50 text-blue-700"
-                        : "border-zinc-300 bg-white text-zinc-700"
+                        ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-cyan-500/70 dark:bg-cyan-500/15 dark:text-cyan-200"
+                        : "border-zinc-300 bg-white text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                     }`}
                   >
                     {deck.name}
@@ -72,7 +72,7 @@ export default function AnkiSidebar({
       </div>
 
       <Card
-        className={`hidden border border-white/70 bg-white/85 shadow-xl shadow-sky-100/60 backdrop-blur transition-[width] duration-300 ease-out md:sticky md:top-4 md:block md:h-[calc(100vh-120px)] ${
+        className={`hidden border border-white/70 bg-white/85 shadow-xl shadow-sky-100/60 backdrop-blur transition-[width] duration-300 ease-out dark:border-zinc-700/80 dark:bg-zinc-900/70 dark:shadow-none md:sticky md:top-4 md:block md:self-start ${
           isSidebarExpanded ? "md:w-[260px]" : "md:w-[84px]"
         }`}
         onMouseEnter={() => {
@@ -88,7 +88,7 @@ export default function AnkiSidebar({
         <CardHeader className="pb-2">
           <div className="w-full space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-[family-name:var(--font-manrope)] text-lg font-bold text-zinc-900">
+              <h2 className="font-[family-name:var(--font-manrope)] text-lg font-bold text-zinc-900 dark:text-zinc-100">
                 Decks
               </h2>
               <div className="flex items-center gap-2">
@@ -111,9 +111,9 @@ export default function AnkiSidebar({
         </CardHeader>
         <CardBody className="pt-2">
           {decks.length === 0 ? (
-            <p className="text-sm text-zinc-500">Create a deck to get started.</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Create a deck to get started.</p>
           ) : (
-            <div className="space-y-2 overflow-x-auto md:overflow-y-auto">
+            <div className="space-y-2 overflow-x-auto">
               {decks.map((deck) => {
                 const due = deck.cards.filter((card) => card.dueAt <= nowTs).length;
                 const selected = deck.id === activeDeckId;
@@ -124,8 +124,8 @@ export default function AnkiSidebar({
                     onClick={() => onSwitchDeck(deck.id)}
                     className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
                       selected
-                        ? "border-blue-300 bg-blue-50/80 shadow-sm"
-                        : "border-zinc-200 bg-white hover:border-zinc-300"
+                        ? "border-blue-300 bg-blue-50/80 shadow-sm dark:border-cyan-500/60 dark:bg-cyan-500/10 dark:shadow-none"
+                        : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/60 dark:hover:border-zinc-600"
                     }`}
                   >
                     <div className={`relative ${isSidebarExpanded ? "min-h-10" : "min-h-20"}`}>
@@ -137,12 +137,12 @@ export default function AnkiSidebar({
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <p className="truncate font-medium text-zinc-900">{deck.name}</p>
+                          <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">{deck.name}</p>
                           <Chip size="sm" color={due > 0 ? "warning" : "success"} variant="flat">
                             {due}
                           </Chip>
                         </div>
-                        <p className="mt-1 text-xs text-zinc-500">{deck.cards.length} Cards</p>
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{deck.cards.length} Cards</p>
                       </div>
                       <div
                         className={`absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out ${
