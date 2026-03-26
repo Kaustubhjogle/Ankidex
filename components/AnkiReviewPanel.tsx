@@ -70,7 +70,7 @@ export default function AnkiReviewPanel({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.98 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
-                className="rounded-2xl border border-zinc-200/90 bg-zinc-50/80 p-5 shadow-inner"
+                className="min-h-[240px] rounded-2xl border border-zinc-200/90 bg-zinc-50/80 p-5 shadow-inner"
               >
                 <p className="mb-2 text-[11px] uppercase tracking-[0.2em] text-zinc-500">
                   {showBack ? "Back" : "Front"}
@@ -82,9 +82,11 @@ export default function AnkiReviewPanel({
             </AnimatePresence>
 
             {!showBack ? (
-              <Button color="primary" variant="shadow" onPress={onShowAnswer}>
-                Show Answer
-              </Button>
+              <div className="flex justify-center">
+                <Button color="primary" variant="shadow" onPress={onShowAnswer}>
+                  Show Answer
+                </Button>
+              </div>
             ) : (
               <div className="grid gap-2 sm:grid-cols-4">
                 <Button color="danger" variant="flat" onPress={() => onRateCard(0)}>

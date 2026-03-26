@@ -49,6 +49,7 @@ export default function Home() {
   const [newBack, setNewBack] = useState("");
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSavingCard, setIsSavingCard] = useState(false);
   const [isDeckModalOpen, setIsDeckModalOpen] = useState(false);
   const [isAllFlashcardsModalOpen, setIsAllFlashcardsModalOpen] = useState(false);
 
@@ -182,14 +183,15 @@ export default function Home() {
     }
   }
 
-  async function addCard() {
-    if (!supabase || !authUser || !activeDeckId) return;
+  async function addCard(): Promise<boolean> {
+    if (!supabase || !authUser || !activeDeckId || isSavingCard) return false;
 
     const front = newFront.trim();
     const back = newBack.trim();
-    if (!front || !back) return;
+    if (!front || !back) return false;
 
     setDataError(null);
+    setIsSavingCard(true);
     try {
       const card = await createCardRecord(supabase, authUser.id, activeDeckId, front, back);
 
@@ -206,12 +208,15 @@ export default function Home() {
 
       setNewFront("");
       setNewBack("");
-      setIsAddModalOpen(false);
       setReviewCardId(card.id);
       setShowBack(false);
       setNowTs(Date.now());
+      return true;
     } catch (error) {
       setDataError(error instanceof Error ? error.message : "Could not add card.");
+      return false;
+    } finally {
+      setIsSavingCard(false);
     }
   }
 
@@ -505,6 +510,7 @@ export default function Home() {
 
       <AnkiAddFlashcardModal
         isOpen={isAddModalOpen}
+        isSaving={isSavingCard}
         front={newFront}
         back={newBack}
         onOpenChange={setIsAddModalOpen}

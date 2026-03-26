@@ -10,16 +10,18 @@ import {
 
 type AnkiAddFlashcardModalProps = {
   isOpen: boolean;
+  isSaving: boolean;
   front: string;
   back: string;
   onOpenChange: (isOpen: boolean) => void;
   onFrontChange: (value: string) => void;
   onBackChange: (value: string) => void;
-  onSave: () => void;
+  onSave: () => Promise<boolean> | boolean;
 };
 
 export default function AnkiAddFlashcardModal({
   isOpen,
+  isSaving,
   front,
   back,
   onOpenChange,
@@ -28,7 +30,18 @@ export default function AnkiAddFlashcardModal({
   onSave,
 }: AnkiAddFlashcardModalProps) {
   return (
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange} placement="bottom-center" scrollBehavior="inside">
+    <Modal
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      placement="bottom-center"
+      scrollBehavior="inside"
+      motionProps={{
+        initial: { opacity: 0, y: 16, scale: 0.98 },
+        animate: { opacity: 1, y: 0, scale: 1 },
+        exit: { opacity: 0, y: 20, scale: 0.96 },
+        transition: { duration: 0.22, ease: "easeOut" },
+      }}
+    >
       <ModalContent>
         {(onClose) => (
           <>
@@ -54,10 +67,18 @@ export default function AnkiAddFlashcardModal({
               />
             </ModalBody>
             <ModalFooter>
-              <Button variant="light" onPress={onClose}>
+              <Button variant="light" onPress={onClose} isDisabled={isSaving}>
                 Cancel
               </Button>
-              <Button color="primary" onPress={onSave}>
+              <Button
+                color="primary"
+                isLoading={isSaving}
+                isDisabled={isSaving}
+                onPress={async () => {
+                  const saved = await onSave();
+                  if (saved) onClose();
+                }}
+              >
                 Save Card
               </Button>
             </ModalFooter>
