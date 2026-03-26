@@ -1,71 +1,137 @@
 import { Button, Card, CardBody, CardHeader, Input } from "@heroui/react";
+import { motion } from "framer-motion";
 
 type AuthPanelProps = {
+  username: string;
   email: string;
   password: string;
-  signInLoading: boolean;
-  signUpLoading: boolean;
+  mode: "signin" | "signup";
+  loading: boolean;
   error: string | null;
+  onUsernameChange: (value: string) => void;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
-  onSignIn: () => void;
-  onSignUp: () => void;
+  onSubmit: () => void;
+  onToggleMode: () => void;
 };
 
 export default function AuthPanel({
+  username,
   email,
   password,
-  signInLoading,
-  signUpLoading,
+  mode,
+  loading,
   error,
+  onUsernameChange,
   onEmailChange,
   onPasswordChange,
-  onSignIn,
-  onSignUp,
+  onSubmit,
+  onToggleMode,
 }: AuthPanelProps) {
+  const isSignUp = mode === "signup";
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.25),_transparent_42%),linear-gradient(145deg,#f8fafc_0%,#f8fafc_45%,#fff7ed_100%)] px-4 py-8 sm:px-6">
-      <div className="mx-auto flex min-h-[80vh] max-w-md items-center">
-        <Card className="w-full border border-white/70 bg-white/90 shadow-xl shadow-sky-100/70 backdrop-blur">
-          <CardHeader className="flex-col items-start gap-1">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-zinc-500">Welcome Back</p>
-            <h1 className="font-[family-name:var(--font-space-grotesk)] text-2xl font-bold text-zinc-900">
-              Sign In To Anki Deck Lab
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-8 sm:px-6 sm:py-10">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-20 top-16 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
+        <div className="absolute -right-20 bottom-16 h-80 w-80 rounded-full bg-emerald-300/15 blur-3xl" />
+        <motion.div
+          className="absolute left-1/2 top-0 h-80 w-[34rem] -translate-x-1/2 rounded-full bg-indigo-400/10 blur-3xl"
+          animate={{ y: [0, 20, 0] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+        />
+      </div>
+
+      <div className="relative mx-auto flex min-h-[84vh] max-w-2xl items-center">
+        <Card className="w-full rounded-[28px] border border-white/20 bg-slate-900/70 shadow-2xl shadow-cyan-950/40 backdrop-blur-2xl">
+          <CardHeader className="flex-col items-start gap-2 px-6 pt-7 sm:px-10 sm:pt-10">
+            <p className="text-[11px] uppercase tracking-[0.32em] text-slate-400">
+              {isSignUp ? "Start Learning" : "Welcome Back"}
+            </p>
+            <h1 className="font-[family-name:var(--font-space-grotesk)] text-3xl font-bold text-white sm:text-4xl">
+              {isSignUp ? "Create Your Ankidex Account" : "Sign In To Ankidex"}
             </h1>
+            <p className="text-sm text-slate-300/90">
+              {isSignUp
+                ? "Build your spaced-repetition workspace in seconds."
+                : "Pick up where you left off and continue your review flow."}
+            </p>
           </CardHeader>
-          <CardBody>
+          <CardBody className="px-6 pb-8 pt-2 sm:px-10 sm:pb-10">
             <form
-              className="space-y-3"
+              className="mx-auto w-full max-w-xl space-y-5"
               onSubmit={(event) => {
                 event.preventDefault();
-                onSignIn();
+                onSubmit();
               }}
             >
-              <Input
-                type="email"
-                label="Email"
-                labelPlacement="outside"
-                placeholder="you@example.com"
-                value={email}
-                onValueChange={onEmailChange}
-                variant="bordered"
-              />
-              <Input
-                type="password"
-                label="Password"
-                labelPlacement="outside"
-                placeholder="Your password"
-                value={password}
-                onValueChange={onPasswordChange}
-                variant="bordered"
-              />
-              {error ? <p className="text-sm text-danger">{error}</p> : null}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Button color="primary" type="submit" isLoading={signInLoading}>
-                  Sign In
+              {isSignUp ? (
+                <div className="w-full space-y-2">
+                  <label className="block text-sm font-medium text-slate-200">Username</label>
+                  <Input
+                    type="text"
+                    placeholder="choose a unique username"
+                    value={username}
+                    onValueChange={onUsernameChange}
+                    variant="bordered"
+                    className="w-full"
+                    classNames={{
+                      inputWrapper:
+                        "h-12 rounded-xl bg-slate-900/60 border-slate-700/80 hover:border-slate-500 focus-within:border-cyan-400",
+                      input: "text-slate-100 placeholder:text-slate-400",
+                    }}
+                  />
+                </div>
+              ) : null}
+              <div className="w-full space-y-2">
+                <label className="block text-sm font-medium text-slate-200">Email</label>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onValueChange={onEmailChange}
+                  variant="bordered"
+                  className="w-full"
+                  classNames={{
+                    inputWrapper:
+                      "h-12 rounded-xl bg-slate-900/60 border-slate-700/80 hover:border-slate-500 focus-within:border-cyan-400",
+                    input: "text-slate-100 placeholder:text-slate-400",
+                  }}
+                />
+              </div>
+              <div className="w-full space-y-2 pt-2">
+                <label className="block text-sm font-medium text-slate-200">Password</label>
+                <Input
+                  type="password"
+                  placeholder="Your password"
+                  value={password}
+                  onValueChange={onPasswordChange}
+                  variant="bordered"
+                  className="w-full"
+                  classNames={{
+                    inputWrapper:
+                      "h-12 rounded-xl bg-slate-900/60 border-slate-700/80 hover:border-slate-500 focus-within:border-cyan-400",
+                    input: "text-slate-100 placeholder:text-slate-400 text-white",
+                  }}
+                />
+              </div>
+              {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+              <div className="space-y-3 pt-1">
+                <Button
+                  color="primary"
+                  type="submit"
+                  isLoading={loading}
+                  className="h-10 w-full rounded-xl bg-cyan-500 font-semibold text-slate-950 hover:bg-cyan-400"
+                >
+                  {isSignUp ? "Create Account" : "Sign In"}
                 </Button>
-                <Button variant="flat" type="button" onPress={onSignUp} isLoading={signUpLoading}>
-                  Create Account
+                <Button
+                  variant="bordered"
+                  type="button"
+                  onPress={onToggleMode}
+                  className="h-10 w-full rounded-xl border-slate-600/90 bg-transparent px-3 py-1 text-sm text-slate-200"
+                >
+                  {isSignUp ? "Already A User? Sign In" : "New To Ankidex? Create Account"}
                 </Button>
               </div>
             </form>

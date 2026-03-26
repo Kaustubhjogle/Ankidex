@@ -101,10 +101,6 @@ export default function AnkiReviewPanel({
                 </Button>
               </div>
             )}
-
-            <Snippet hideSymbol size="sm" className="bg-zinc-100 text-zinc-600">
-              Good answer returns in {formatNextReview(applyRecall(reviewCard, 4, nowTs).dueAt, nowTs)}
-            </Snippet>
           </div>
         )}
       </CardBody>

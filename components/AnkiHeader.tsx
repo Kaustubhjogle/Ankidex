@@ -1,16 +1,12 @@
 import { Button, Chip } from "@heroui/react";
 
 type AnkiHeaderProps = {
-  hasActiveDeck: boolean;
-  userEmail: string;
-  onAddFlashcard: () => void;
+  username: string;
   onSignOut: () => void;
 };
 
 export default function AnkiHeader({
-  hasActiveDeck,
-  userEmail,
-  onAddFlashcard,
+  username,
   onSignOut,
 }: AnkiHeaderProps) {
   return (
@@ -23,17 +19,8 @@ export default function AnkiHeader({
       </div>
       <div className="flex items-center gap-2">
         <Chip variant="flat" color="default" className="hidden sm:inline-flex">
-          {userEmail}
+          @{username}
         </Chip>
-        <Button
-          color="primary"
-          variant="shadow"
-          className="font-semibold"
-          onPress={onAddFlashcard}
-          isDisabled={!hasActiveDeck}
-        >
-          Add Flashcard
-        </Button>
         <Button variant="light" onPress={onSignOut}>
           Sign Out
         </Button>

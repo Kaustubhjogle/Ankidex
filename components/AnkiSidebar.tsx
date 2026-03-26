@@ -51,7 +51,7 @@ export default function AnkiSidebar({
         <div className="w-full space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-[family-name:var(--font-manrope)] text-lg font-bold text-zinc-900">
-              {isSidebarExpanded ? "Decks" : "📚"}
+              Decks
             </h2>
             <div className="flex items-center gap-2">
               <div className={`overflow-hidden transition-all duration-200 ease-out ${sidebarContentClass}`}>

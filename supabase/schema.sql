@@ -8,6 +8,12 @@ create table if not exists public.decks (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  username text not null unique,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.cards (
   id uuid primary key default gen_random_uuid(),
   deck_id uuid not null references public.decks(id) on delete cascade,
@@ -30,6 +36,7 @@ create table if not exists public.card_reviews (
 );
 
 alter table public.decks enable row level security;
+alter table public.profiles enable row level security;
 alter table public.cards enable row level security;
 alter table public.card_reviews enable row level security;
 
@@ -44,6 +51,12 @@ for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "decks_delete_own" on public.decks
 for delete using (auth.uid() = user_id);
+
+create policy "profiles_select_own" on public.profiles
+for select using (auth.uid() = user_id);
+
+create policy "profiles_update_own" on public.profiles
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "cards_select_own" on public.cards
 for select using (
@@ -94,3 +107,31 @@ for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "reviews_delete_own" on public.card_reviews
 for delete using (auth.uid() = user_id);
+
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  candidate_username text;
+begin
+  candidate_username := lower(new.raw_user_meta_data->>'username');
+
+  if candidate_username is null or candidate_username = '' then
+    raise exception 'Username is required';
+  end if;
+
+  insert into public.profiles (user_id, username)
+  values (new.id, candidate_username);
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_profile on auth.users;
+
+create trigger on_auth_user_created_profile
+after insert on auth.users
+for each row execute function public.handle_new_user_profile();

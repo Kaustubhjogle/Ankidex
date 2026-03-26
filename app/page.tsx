@@ -27,6 +27,8 @@ export default function Home() {
 
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(() => missingSupabaseConfig);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authUsername, setAuthUsername] = useState("");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authLoadingAction, setAuthLoadingAction] = useState<"signin" | "signup" | null>(null);
@@ -150,6 +152,10 @@ export default function Home() {
   const dueCount = dueCards.length;
   const totalCards = activeDeck?.cards.length ?? 0;
   const progressValue = Math.round(((totalCards - dueCount) / Math.max(totalCards, 1)) * 100);
+  const displayUsername =
+    (authUser?.user_metadata?.username as string | undefined)?.trim() ||
+    authUser?.email?.split("@")[0] ||
+    "user";
 
   const isSidebarExpanded = !isSidebarMinimized || isSidebarPinnedOpen;
   const sidebarContentClass = isSidebarExpanded
@@ -297,6 +303,10 @@ export default function Home() {
       return "Email or password is incorrect.";
     }
 
+    if (message.includes("duplicate key") || message.includes("profiles_username_key")) {
+      return "That username is taken. Try another one.";
+    }
+
     return error.message ?? "Auth request failed. Please try again.";
   }
 
@@ -336,9 +346,15 @@ export default function Home() {
     }
 
     const normalizedEmail = authEmail.trim().toLowerCase();
+    const normalizedUsername = authUsername.trim().toLowerCase();
 
-    if (!normalizedEmail || !authPassword) {
-      setAuthError("Enter email and password.");
+    if (!normalizedUsername || !normalizedEmail || !authPassword) {
+      setAuthError("Enter username, email, and password.");
+      return;
+    }
+
+    if (!/^[a-z0-9_]{3,20}$/.test(normalizedUsername)) {
+      setAuthError("Username must be 3-20 chars, lowercase letters, numbers, or underscores.");
       return;
     }
 
@@ -348,12 +364,19 @@ export default function Home() {
     const { error } = await supabase.auth.signUp({
       email: normalizedEmail,
       password: authPassword,
+      options: {
+        data: {
+          username: normalizedUsername,
+        },
+      },
     });
 
     if (error) {
       setAuthError(getAuthErrorMessage(error));
     } else {
       setAuthError("Account created. Check your email to verify, then sign in.");
+      setAuthUsername("");
+      setAuthMode("signin");
     }
 
     setAuthLoadingAction(null);
@@ -364,8 +387,10 @@ export default function Home() {
     await supabase.auth.signOut();
     setAuthUser(null);
     setAuthError(null);
+    setAuthUsername("");
     setAuthEmail("");
     setAuthPassword("");
+    setAuthMode("signin");
     setDecks([]);
     setActiveDeckId(null);
   }
@@ -383,15 +408,20 @@ export default function Home() {
   if (!authUser) {
     return (
       <AuthPanel
+        username={authUsername}
         email={authEmail}
         password={authPassword}
-        signInLoading={authLoadingAction === "signin"}
-        signUpLoading={authLoadingAction === "signup"}
+        mode={authMode}
+        loading={authLoadingAction === authMode}
         error={authError}
+        onUsernameChange={setAuthUsername}
         onEmailChange={setAuthEmail}
         onPasswordChange={setAuthPassword}
-        onSignIn={signIn}
-        onSignUp={signUp}
+        onSubmit={authMode === "signup" ? signUp : signIn}
+        onToggleMode={() => {
+          setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
+          setAuthError(null);
+        }}
       />
     );
   }
@@ -400,9 +430,7 @@ export default function Home() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.25),_transparent_42%),linear-gradient(145deg,#f8fafc_0%,#f8fafc_45%,#fff7ed_100%)] px-3 py-4 sm:px-5 sm:py-6">
       <div className="mx-auto max-w-6xl">
         <AnkiHeader
-          hasActiveDeck={Boolean(activeDeck)}
-          userEmail={authUser.email ?? "signed-in user"}
-          onAddFlashcard={() => setIsAddModalOpen(true)}
+          username={displayUsername}
           onSignOut={signOut}
         />
 
@@ -449,7 +477,17 @@ export default function Home() {
               onOpenAddFlashcard={() => setIsAddModalOpen(true)}
             />
 
-            <div className="flex justify-center pt-1">
+            <div className="flex justify-center gap-2 pt-1">
+              <Button
+                color="primary"
+                variant="flat"
+                size="sm"
+                className="font-semibold px-4"
+                onPress={() => setIsAddModalOpen(true)}
+                isDisabled={!activeDeck}
+              >
+                Add Flashcard
+              </Button>
               <Button
                 color="secondary"
                 variant="flat"
