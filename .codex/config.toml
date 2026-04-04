@@ -3,7 +3,7 @@ hide_agent_reasoning = true
 show_raw_agent_reasoning = false
 
 # auto-approve edits and commands — beginners should never see approval prompts
-approval_policy = "full-auto"
+approval_policy = "never"
 sandbox_mode = "workspace-write"
 
 # allow network access so codex can install npm packages silently

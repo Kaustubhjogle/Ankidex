@@ -2,11 +2,13 @@
 
 import { User } from "@supabase/supabase-js";
 import { Button } from "@heroui/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import AnkiAddDeckModal from "@/components/AnkiAddDeckModal";
 import AnkiAddFlashcardModal from "@/components/AnkiAddFlashcardModal";
 import AnkiAllFlashcardsModal from "@/components/AnkiAllFlashcardsModal";
 import AnkiHeader from "@/components/AnkiHeader";
+import AnkiReviewFeedbackModal from "@/components/AnkiReviewFeedbackModal";
 import AnkiReviewPanel from "@/components/AnkiReviewPanel";
 import AnkiSidebar from "@/components/AnkiSidebar";
 import AuthPanel from "@/components/AuthPanel";
@@ -57,6 +59,12 @@ export default function Home() {
 
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [isSidebarPinnedOpen, setIsSidebarPinnedOpen] = useState(false);
+  const [againFlashBurstId, setAgainFlashBurstId] = useState(0);
+  const [reviewFeedback, setReviewFeedback] = useState<{
+    isOpen: boolean;
+    label: "Again" | "Hard" | "Good" | "Easy";
+  }>({ isOpen: false, label: "Good" });
+  const againAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [reviewCardId, setReviewCardId] = useState<string | null>(null);
   const [showBack, setShowBack] = useState(false);
@@ -85,6 +93,25 @@ export default function Home() {
     const timer = window.setInterval(() => setNowTs(Date.now()), 30000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const audio = new Audio("/sounds/fahhh_KcgAXfs.mp3");
+    audio.preload = "auto";
+    againAudioRef.current = audio;
+    return () => {
+      audio.pause();
+      againAudioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!reviewFeedback.isOpen) return;
+    const timer = window.setTimeout(
+      () => setReviewFeedback((prev) => ({ ...prev, isOpen: false })),
+      1200
+    );
+    return () => window.clearTimeout(timer);
+  }, [reviewFeedback.isOpen]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -270,6 +297,20 @@ export default function Home() {
 
   async function rateCurrentCard(q: QualityScore) {
     if (!supabase || !authUser || !activeDeckId || !reviewCard) return;
+    const labelMap: Record<QualityScore, "Again" | "Hard" | "Good" | "Easy"> = {
+      0: "Again",
+      3: "Hard",
+      4: "Good",
+      5: "Easy",
+    };
+    setReviewFeedback({ isOpen: true, label: labelMap[q] });
+    if (q === 0) {
+      setAgainFlashBurstId((prev) => prev + 1);
+      if (againAudioRef.current) {
+        againAudioRef.current.currentTime = 0;
+        void againAudioRef.current.play().catch(() => {});
+      }
+    }
 
     const now = Date.now();
     const updatedCard = applyRecall(reviewCard, q, now);
@@ -486,6 +527,19 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.25),_transparent_42%),linear-gradient(145deg,#f8fafc_0%,#f8fafc_45%,#fff7ed_100%)] px-3 py-4 dark:bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.15),_transparent_38%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.14),_transparent_42%),linear-gradient(145deg,#020617_0%,#0f172a_55%,#111827_100%)] sm:px-5 sm:py-6">
       {appThemeToggle}
+      <AnimatePresence>
+        {againFlashBurstId > 0 ? (
+          <motion.div
+            key={againFlashBurstId}
+            className="pointer-events-none fixed inset-0 z-[40] bg-red-500"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.3, 0.18, 0] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            onAnimationComplete={() => setAgainFlashBurstId(0)}
+          />
+        ) : null}
+      </AnimatePresence>
       <div className="mx-auto max-w-6xl">
         <AnkiHeader
           username={displayUsername}
@@ -587,6 +641,17 @@ export default function Home() {
         nowTs={nowTs}
         onOpenChange={setIsAllFlashcardsModalOpen}
         onPickCard={pickCardFromList}
+      />
+
+      <AnkiReviewFeedbackModal
+        isOpen={reviewFeedback.isOpen}
+        label={reviewFeedback.label}
+        onOpenChange={(isOpen) =>
+          setReviewFeedback((prev) => ({
+            ...prev,
+            isOpen,
+          }))
+        }
       />
     </div>
   );
